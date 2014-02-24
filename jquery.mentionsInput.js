@@ -1,3 +1,133 @@
+/**
+*  @name              Elastic
+* @descripton           Elastic is jQuery plugin that grow and shrink your textareas automatically
+* @version            1.6.11
+* @requires           jQuery 1.2.6+
+*
+* @author             Jan Jarfalk
+* @author-email         jan.jarfalk@unwrongest.com
+* @author-website         http://www.unwrongest.com
+*
+* @licence            MIT License - http://www.opensource.org/licenses/mit-license.php
+*/
+
+(function($){ 
+  jQuery.fn.extend({  
+    elastic: function() {
+      //  We will create a div clone of the textarea
+      //  by copying these attributes from the textarea to the div.
+      var mimics = [
+        'paddingTop',
+        'paddingRight',
+        'paddingBottom',
+        'paddingLeft',
+        'fontSize',
+        'lineHeight',
+        'fontFamily',
+        'width',
+        'fontWeight',
+        'border-top-width',
+        'border-right-width',
+        'border-bottom-width',
+        'border-left-width',
+        'borderTopStyle',
+        'borderTopColor',
+        'borderRightStyle',
+        'borderRightColor',
+        'borderBottomStyle',
+        'borderBottomColor',
+        'borderLeftStyle',
+        'borderLeftColor'
+        ];
+      return this.each( function() {
+
+        // Elastic only works on textareas
+        if ( this.type !== 'textarea' ) {
+          return false;
+        }
+      var $textarea = jQuery(this),
+        $twin   = jQuery('<div />').css({
+          'position'    : 'absolute',
+          'display'   : 'none',
+          'word-wrap'   : 'break-word',
+          'white-space' :'pre-wrap'
+        }),
+        lineHeight  = parseInt($textarea.css('line-height'),10) || parseInt($textarea.css('font-size'),'10'),
+        minheight = parseInt($textarea.css('height'),10) || lineHeight*3,
+        maxheight = parseInt($textarea.css('max-height'),10) || Number.MAX_VALUE,
+        goalheight  = 0;
+        // Opera returns max-height of -1 if not set
+        if (maxheight < 0) { maxheight = Number.MAX_VALUE; }
+        // Append the twin to the DOM
+        // We are going to meassure the height of this, not the textarea.
+        $twin.appendTo($textarea.parent());
+
+        // Copy the essential styles (mimics) from the textarea to the twin
+        var i = mimics.length;
+        while(i--){
+          $twin.css(mimics[i].toString(),$textarea.css(mimics[i].toString()));
+        }
+        // Updates the width of the twin. (solution for textareas with widths in percent)
+        function setTwinWidth(){
+          var curatedWidth = Math.floor(parseInt($textarea.width(),10));
+          if($twin.width() !== curatedWidth){
+            $twin.css({'width': curatedWidth + 'px'});
+            // Update height of textarea
+            update(true);
+          }
+        }
+        // Sets a given height and overflow state on the textarea
+        function setHeightAndOverflow(height, overflow){
+          var curratedHeight = Math.floor(parseInt(height,10));
+          if($textarea.height() !== curratedHeight){
+            $textarea.css({'height': curratedHeight + 'px','overflow':overflow});
+            $textarea.trigger('elastified');
+          }
+        }
+
+        function update(forced) {
+          // Get curated content from the textarea.
+          var textareaContent = $textarea.val().replace(/&/g,'&amp;').replace(/ {2}/g, '&nbsp;').replace(/<|>/g, '&gt;').replace(/\n/g, '<br />');
+          // Compare curated content with curated twin.
+          var twinContent = $twin.html().replace(/<br>/ig,'<br />');
+          if(forced || textareaContent+'&nbsp;' !== twinContent){
+            // Add an extra white space so new rows are added when you are at the end of a row.
+            $twin.html(textareaContent+'&nbsp;');
+            // Change textarea height if twin plus the height of one line differs more than 3 pixel from textarea height
+            if(Math.abs($twin.height() + lineHeight - $textarea.height()) > 3){
+              var goalheight = $twin.height()+lineHeight;
+              if(goalheight >= maxheight) {
+                setHeightAndOverflow(maxheight,'auto');
+              } else if(goalheight <= minheight) {
+                setHeightAndOverflow(minheight,'hidden');
+              } else {
+                setHeightAndOverflow(goalheight,'hidden');
+              }
+            }
+          }
+        }
+        // Hide scrollbars
+        $textarea.css({'overflow':'hidden'});
+        // Update textarea size on keyup, change, cut and paste
+        $textarea.bind('keyup change cut paste', function(){
+          update(); 
+        });
+        // Update width of twin if browser or textarea is resized (solution for textareas with widths in percent)
+        $(window).bind('resize', setTwinWidth);
+        $textarea.bind('resize', setTwinWidth);
+        $textarea.bind('update', update);
+
+        // Compact textarea on blur
+
+        // And this line is to catch the browser paste event
+        $textarea.bind('input paste',function(e){ setTimeout( update, 250); });       
+        // Run update once when elastic is initialized
+        update();
+      });
+        } 
+    }); 
+})(jQuery);
+
 /*
  * Mentions Input
  * Version 1.0.2
@@ -15,9 +145,10 @@
   var defaultSettings = {
     triggerChar   : '@',
     onDataRequest : $.noop,
-    minChars      : 2,
+    minChars      : 3,
+    types         : ['user'],
     showAvatars   : true,
-    elastic       : true,
+    elastic       : false,
     classes       : {
       autoCompleteItemActive : "active"
     },
@@ -29,7 +160,7 @@
       autocompleteListItemIcon   : _.template('<div class="icon <%= icon %>"></div>'),
       mentionsOverlay            : _.template('<div class="mentions"><div></div></div>'),
       mentionItemSyntax          : _.template('@[<%= value %>](<%= type %>:<%= id %>)'),
-      mentionItemHighlight       : _.template('<strong><span><%= value %></span></strong>')
+      mentionItemHighlight       : _.template('<span><b data-type="<%= type%>" data-id="<%= id%>"><%= value %></b></span>')
     }
   };
 
@@ -43,19 +174,21 @@
       }
       return value.replace(new RegExp("(?![^&;]+;)(?!<[^<>]*)(" + term + ")(?![^<>]*>)(?![^&;]+;)", "gi"), "<b>$1</b>");
     },
-    setCaratPosition : function (domNode, caretPos) {
-      if (domNode.createTextRange) {
-        var range = domNode.createTextRange();
-        range.move('character', caretPos);
-        range.select();
-      } else {
-        if (domNode.selectionStart) {
-          domNode.focus();
-          domNode.setSelectionRange(caretPos, caretPos);
-        } else {
-          domNode.focus();
+    getAllIndecesOf:   function (value, text, caseSensitive) {
+        var startIndex = 0, valueLen = value.length,
+            index, indices = [];
+
+        if (!caseSensitive) {
+          text = text.toLowerCase();
+          value = value.toLowerCase();
         }
-      }
+
+        while ((index = text.indexOf(value, startIndex)) > -1) {
+          indices.push(index);
+          startIndex = index + valueLen;
+        }
+
+        return indices;
     },
     rtrim: function(string) {
       return string.replace(/\s+$/,"");
@@ -64,13 +197,15 @@
 
   var MentionsInput = function (settings) {
 
-    var domInput, elmInputBox, elmInputWrapper, elmAutocompleteList, elmWrapperBox, elmMentionsOverlay, elmActiveAutoCompleteItem;
-    var mentionsCollection = [];
+    var domInput, elmInputBox, elmInputWrapper, elmAutocompleteList, elmWrapperBox, elmMentionsOverlay, elmActiveAutoCompleteItem,
+        mentionsCollection = [], mentionsMap = {};
     var autocompleteItemCollection = {};
     var inputBuffer = [];
     var currentDataQuery;
+    var previousInput = '', previousCaretPosition, previousWord, caretPosition;
 
     settings = $.extend(true, {}, defaultSettings, settings );
+    settings.mentionsRegex = settings.mentionsRegex || new RegExp("@\\[(.*?)\\]\\((" + settings.types.join('|') + "):(.*?)\\)");
 
     function initTextarea() {
       elmInputBox = $(domInput);
@@ -90,12 +225,13 @@
       elmInputBox.bind('input', onInputBoxInput);
       elmInputBox.bind('click', onInputBoxClick);
       elmInputBox.bind('blur', onInputBoxBlur);
+      elmInputBox.bind('elastified', onInputElastified);
+      elmInputBox.bind('focus', onInputElastified);
 
       // Elastic textareas, internal setting for the Dispora guys
-      if( settings.elastic ) {
+      if (settings.elastic) {
         elmInputBox.elastic();
       }
-
     }
 
     function initAutocomplete() {
@@ -107,31 +243,106 @@
     function initMentionsOverlay() {
       elmMentionsOverlay = $(settings.templates.mentionsOverlay());
       elmMentionsOverlay.prependTo(elmWrapperBox);
+      elmMentionsOverlay.find('div').html(elmInputBox.val())
     }
 
     function updateValues() {
-      var syntaxMessage = getInputBoxValue();
+      var syntaxMessage = getInputBoxValue(),
+          mention, removedMention, removedMentionPos, textParts = [], ind,
+          formattedMention, textSyntax, textHighlight, match,
+          nextInput, mentionText, textToReplace, removeUpdate = false;
 
-      _.each(mentionsCollection, function (mention) {
-        var textSyntax = settings.templates.mentionItemSyntax(mention);
-        syntaxMessage = syntaxMessage.replace(mention.value, textSyntax);
+      match = settings.mentionsRegex.exec(syntaxMessage);
+      if (match !== null && match[1] && match[2] && match[3]) {
+        mention = {
+          value: match[1],
+          name: match[1],
+          type: match[2],
+          id: match[3]
+        };
+        syntaxMessage = syntaxMessage.replace(match[0], mention.value);
+        elmInputBox.val(syntaxMessage);
+
+        mentionsCollection.push(mention);
+        mentionsMap[mention.name] = (mentionsMap[mention.name] || 0) + 1;
+      }
+
+      removedMention = _.find(mentionsCollection, function (mention, index) {
+        if (mentionsMap[mention.value] === 1) {
+          return !mention.value || syntaxMessage.indexOf(mention.value) == -1
+        } else {
+          return mentionsMap[mention.value] !== (syntaxMessage.split(mention.value).length - 1);
+        }
       });
 
-      var mentionText = utils.htmlEncode(syntaxMessage);
+      if (removedMention) {
+        syntaxMessage = previousInput;
+
+        if (mentionsMap[removedMention.value] > 1) {
+          removedMentionPos = 0;
+          _.each(utils.getAllIndecesOf(removedMention.value, syntaxMessage, true), function (index) {
+            if (index < caretPosition) {
+              removedMentionPos = removedMentionPos + 1;
+            }
+          });
+        } else {
+          removedMentionPos = 1;
+        }
+      }
 
       _.each(mentionsCollection, function (mention) {
-        var formattedMention = _.extend({}, mention, {value: utils.htmlEncode(mention.value)});
-        var textSyntax = settings.templates.mentionItemSyntax(formattedMention);
-        var textHighlight = settings.templates.mentionItemHighlight(formattedMention);
+        textSyntax = settings.templates.mentionItemSyntax(mention);
+        textToReplace = mention.value;
+
+        if (removedMention && removedMention.value == mention.value && removedMentionPos <= 1 && !removeUpdate) {
+          mentionsMap[mention.value] = mentionsMap[mention.value] - 1;
+          removedMention = mention;
+
+          if (removedMention.value.indexOf(' ') > 0) {
+            removedMention.value = removedMention.value.replace(previousWord, '').trim().replace(/ +(?= )/g,'');
+            textSyntax = settings.templates.mentionItemSyntax(removedMention);
+
+            mentionsMap[removedMention.value] = (mentionsMap[removedMention.value] || 0)  + 1;
+          } else {
+            textSyntax = '';
+          }
+
+          removeUpdate = true;
+        } else if (removedMention && removedMention.value == mention.value) {
+          removedMentionPos = removedMentionPos - 1;
+        }
+
+        ind = syntaxMessage.indexOf(textToReplace) + textToReplace.length;
+        textParts.push(syntaxMessage.substring(0, ind).replace(textToReplace, textSyntax));
+
+        syntaxMessage = syntaxMessage.substring(ind);
+      });
+      textParts.push(syntaxMessage);
+
+      syntaxMessage = textParts.join('');
+
+      mentionText = utils.htmlEncode(syntaxMessage);
+
+      _.each(mentionsCollection, function (mention) {
+        formattedMention = _.extend({}, mention, {value: utils.htmlEncode(mention.value)});
+        textSyntax = settings.templates.mentionItemSyntax(formattedMention);
+        textHighlight = settings.templates.mentionItemHighlight(formattedMention);
 
         mentionText = mentionText.replace(textSyntax, textHighlight);
       });
 
+      nextInput = mentionText;
       mentionText = mentionText.replace(/\n/g, '<br />');
       mentionText = mentionText.replace(/ {2}/g, '&nbsp; ');
 
       elmInputBox.data('messageText', syntaxMessage);
       elmMentionsOverlay.find('div').html(mentionText);
+
+      if (removedMention) {
+        elmInputBox.val(nextInput.replace(/<(?:.|\n)*?>/gm, ''));
+        elmInputBox.selectRange(previousCaretPosition);
+      }
+
     }
 
     function resetBuffer() {
@@ -142,7 +353,7 @@
       var inputText = getInputBoxValue();
 
       mentionsCollection = _.reject(mentionsCollection, function (mention, index) {
-        return !mention.value || inputText.indexOf(mention.value) == -1;
+        return !mention.value || inputText.indexOf(mention.value) == -1
       });
       mentionsCollection = _.compact(mentionsCollection);
     }
@@ -163,6 +374,7 @@
       var startEndIndex = (start + mention.value).length + 1;
 
       mentionsCollection.push(mention);
+      mentionsMap[mention.name] = (mentionsMap[mention.name] || 0) + 1;
 
       // Cleaning before inserting the value, otherwise auto-complete would be triggered with "old" inputbuffer
       resetBuffer();
@@ -176,7 +388,7 @@
 
       // Set correct focus and selection
       elmInputBox.focus();
-      utils.setCaratPosition(elmInputBox[0], startEndIndex);
+      elmInputBox.selectRange(startEndIndex);
     }
 
     function getInputBoxValue() {
@@ -198,18 +410,106 @@
 
     function onInputBoxBlur(e) {
       hideAutoComplete();
+
+      return true;
+    }
+
+
+    function getCaret() {
+      var node = elmInputBox[0],
+          c, sel, dul, len;
+
+      if (node.selectionStart) {
+        return node.selectionStart;
+      } else if (!document.selection) {
+        return 0;
+      }
+
+      c = "\001";
+      sel = document.selection.createRange();
+      dul = sel.duplicate();
+      len = 0;
+
+      dul.moveToElementText(node);
+      sel.text = c;
+      len = dul.text.indexOf(c);
+      sel.moveStart('character',-1);
+      sel.text = "";
+      return len;
+    }
+
+    function currentWord() {
+      var text = elmInputBox.val(),
+          caretPos = getCaret(),
+          index = text.indexOf(caretPos),
+          preText = text.substring(0, caretPos),
+          words;
+
+      if (preText.indexOf(' ') > 0) {
+        words = preText.split(' ');
+        return words[words.length - 1];
+      } else {
+        return preText;
+      }
+    }
+
+    function currentWholeWord() {
+      var text = elmInputBox.val(),
+          caretPos = getCaret(),
+          index = text.indexOf(caretPos),
+          preText = text.substring(0, caretPos),
+          nextText = text.substring(caretPos),
+          words, nextInd;
+
+      nextInd = nextText.indexOf(' ');
+      if (nextInd > 0) {
+        nextText = nextText.substring(0, nextInd)
+      }
+
+      if (preText.indexOf(' ') > 0) {
+        words = preText.split(' ');
+        return words[words.length - 1] + nextText;
+      } else {
+        return preText;
+      }
+    }
+
+    function beginningOfCurrentWord() {
+      var text = elmInputBox.val(),
+          caretPos = getCaret(),
+          index = text.indexOf(caretPos),
+          preText = text.substring(0, caretPos),
+          prevInd = preText.lastIndexOf(' ');
+
+      if (prevInd > 0) {
+        return prevInd;
+      } else {
+        return preText;
+      }
     }
 
     function onInputBoxInput(e) {
+      var triggerCharIndex, wordUnderCursor;
+
       updateValues();
       updateMentionsCollection();
 
-      var triggerCharIndex = _.lastIndexOf(inputBuffer, settings.triggerChar);
+      triggerCharIndex = _.lastIndexOf(inputBuffer, settings.triggerChar);
+      if (triggerCharIndex === -1) {
+        wordUnderCursor = currentWord();
+        triggerCharIndex = _.lastIndexOf(wordUnderCursor, settings.triggerChar);
+
+        inputBuffer = wordUnderCursor.split('');
+      }
+
       if (triggerCharIndex > -1) {
         currentDataQuery = inputBuffer.slice(triggerCharIndex + 1).join('');
-        currentDataQuery = utils.rtrim(currentDataQuery);
+        if (getInputBoxValue().indexOf(' ' + settings.triggerChar + currentDataQuery) !== -1 ||
+           getInputBoxValue().indexOf(settings.triggerChar + currentDataQuery) === 0) {
+          currentDataQuery = utils.rtrim(currentDataQuery);
 
-        _.defer(_.bind(doSearch, this, currentDataQuery));
+          _.defer(_.bind(doSearch, this, currentDataQuery));
+        }
       }
     }
 
@@ -221,6 +521,10 @@
     }
 
     function onInputBoxKeyDown(e) {
+      previousInput = getInputBoxValue();
+      previousCaretPosition = beginningOfCurrentWord();
+      caretPosition = getCaret();
+      previousWord = currentWholeWord();
 
       // This also matches HOME/END on OSX which is CMD+LEFT, CMD+RIGHT
       if (e.keyCode == KEY.LEFT || e.keyCode == KEY.RIGHT || e.keyCode == KEY.HOME || e.keyCode == KEY.END) {
@@ -279,9 +583,21 @@
       return true;
     }
 
+    function onInputElastified() {
+      if (elmMentionsOverlay) {
+        var newHeight = elmInputBox.height() + 20;
+        elmMentionsOverlay.height(newHeight - 20);
+        elmWrapperBox.height(newHeight);
+        elmAutocompleteList.css({'top': '' + newHeight + 'px'})
+      }
+      return true;
+    }
+
     function hideAutoComplete() {
       elmActiveAutoCompleteItem = null;
       elmAutocompleteList.empty().hide();
+
+      onInputElastified();
     }
 
     function selectAutoCompleteItem(elmItem) {
@@ -295,10 +611,11 @@
       elmAutocompleteList.show();
 
       // Filter items that has already been mentioned
-      var mentionValues = _.pluck(mentionsCollection, 'value');
+      var mentionIds = _.pluck(mentionsCollection, 'id');
       results = _.reject(results, function (item) {
-        return _.include(mentionValues, item.name);
+        return _.include(mentionIds, item.id);
       });
+
 
       if (!results.length) {
         hideAutoComplete();
@@ -366,7 +683,7 @@
         initTextarea();
         initAutocomplete();
         initMentionsOverlay();
-        resetInput();
+        //resetInput();
 
         if( settings.prefillMention ) {
           addMention( settings.prefillMention );
@@ -387,14 +704,45 @@
         resetInput();
       },
 
-      getMentions : function (callback) {
-        if (!_.isFunction(callback)) {
-          return;
-        }
+      getMentions : function (obj) {
+        var syntaxMessage = getInputBoxValue(), textParts = [], ind;
 
-        callback.call(this, mentionsCollection);
+
+        _.each(mentionsCollection, function (mention) {
+          var textSyntax = settings.templates.mentionItemSyntax(mention);
+
+          ind = syntaxMessage.indexOf(mention.value) + mention.value.length;
+          textParts.push(syntaxMessage.substring(0, ind).replace(mention.value, textSyntax));
+
+          syntaxMessage = syntaxMessage.substring(ind);
+        });
+        textParts.push(syntaxMessage);
+        syntaxMessage = textParts.join('');
+
+        obj.mentions = mentionsCollection;
+        obj.content = syntaxMessage;
       }
     };
+  };
+
+  $.fn.selectRange = function(start, end) {
+    if (!end) {
+      end = start;
+    }
+
+    return this.each(function() {
+      if (this.setSelectionRange) {
+        this.focus();
+        this.setSelectionRange(start, end);
+      } else if (this.createTextRange) {
+        var range = this.createTextRange();
+
+        range.collapse(true);
+        range.moveEnd('character', end);
+        range.moveStart('character', start);
+        range.select();
+      }
+    });
   };
 
   $.fn.mentionsInput = function (method, settings) {
