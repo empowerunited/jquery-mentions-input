@@ -1,13 +1,12 @@
 /*
  * Mentions Input
- * Version 1.1.0
+ * Version 1.2.0
  * Written by: Kenneth Auchenberg (Podio), Nickolay Tzvetinov - meddle0x53 (Empowerunited)
  *
  * Using underscore.js
  *
  * License: MIT License - http://www.opensource.org/licenses/mit-license.php
  */
-
 (function ($, _, undefined) {
 
   // Settings
@@ -19,6 +18,7 @@
     types         : ['user'],
     showAvatars   : true,
     elastic       : false,
+    elasticError  : 20,
     classes       : {
       autoCompleteItemActive : "active"
     },
@@ -236,8 +236,12 @@
       var regex = new RegExp("\\" + settings.triggerChar + currentDataQuery, "gi");
       regex.exec(currentMessage);
 
-      var startCaretPosition = regex.lastIndex - currentDataQuery.length - 1;
-      var currentCaretPosition = regex.lastIndex;
+      var fullQuery = settings.triggerChar + currentDataQuery;
+      var firstIndex = currentMessage.indexOf(fullQuery, (elmInputBox[0].selectionEnd || 0) - fullQuery.length);
+      var lastIndex = firstIndex + currentDataQuery.length + 1;
+
+      var startCaretPosition = firstIndex;
+      var currentCaretPosition = lastIndex;
 
       var start = currentMessage.substr(0, startCaretPosition);
       var end = currentMessage.substr(currentCaretPosition, currentMessage.length);
@@ -455,8 +459,8 @@
 
     function onInputElastified() {
       if (elmMentionsOverlay) {
-        var newHeight = elmInputBox.height() + 20;
-        elmMentionsOverlay.height(newHeight - 20);
+        var newHeight = elmInputBox.height() + settings.elasticError;
+        elmMentionsOverlay.height(newHeight - settings.elasticError);
         elmWrapperBox.height(newHeight);
         elmAutocompleteList.css({'top': '' + newHeight + 'px'})
       }
@@ -544,6 +548,27 @@
       updateValues();
     }
 
+    // Implemented by https://github.com/jfschwarz
+    function destroy() {
+      if (!elmInputBox) {
+        return;
+      }
+
+      elmInputBox.removeAttr('data-mentions-input');
+      elmInputBox.unbind('keydown', onInputBoxKeyDown);
+      elmInputBox.unbind('keypress', onInputBoxKeyPress);
+      elmInputBox.unbind('input', onInputBoxInput);
+      elmInputBox.unbind('click', onInputBoxClick);
+      elmInputBox.unbind('blur', onInputBoxBlur);
+
+      // unwrap the input
+      elmWrapperBox = elmInputWrapper.find('> div');
+      elmInputWrapper.append(elmInputBox);
+      elmWrapperBox.remove();
+
+      $.removeData(elmInputBox.get(0), 'mentionsInput');
+    }
+
     // Public methods
     return {
       init : function (domTarget) {
@@ -572,6 +597,10 @@
 
       reset : function () {
         resetInput();
+      },
+
+      destroy: function() {
+        destroy();
       },
 
       getMentions : function (obj) {
@@ -624,6 +653,9 @@
     }
 
     return this.each(function () {
+      if ('destroy' === method && !$.data(this, 'mentionsInput')){
+        return void 0;
+      }
       var instance = $.data(this, 'mentionsInput') || $.data(this, 'mentionsInput', new MentionsInput(settings));
 
       if (_.isFunction(instance[method])) {
@@ -640,3 +672,4 @@
   };
 
 })(jQuery, _);
+
