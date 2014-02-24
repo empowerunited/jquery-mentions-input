@@ -4,20 +4,10 @@ jquery.mentionsInput is a small, but awesome UI component that allows you to "@m
 
 This project is written by [Kenneth Auchenberg](http://kenneth.io), and started as an internal project at [Podio](http://podio.com), but has then been open sourced to give it a life in the community.
 
-## This project is currently unmaintained (Feb. 13 2013)
-The newest work can be found in the 1.5-branch, but I haven't had the time to complete it. 
+This is a fork of the jquery.mentionsInput that is and will be modified a lot by Nickolay Tzvetinov (https://github.com/meddle0x53) part of the Empower United team.
 
-I anyone is up for improving mentionsInput, then let me know kenneth@auchenberg.dk, and we figure something out.
-
-## Introduction
-To get started -- checkout http://podio.github.com/jquery-mentions-input
-
-## Roadmap
-- Fix open issues.
-- Seperate mentionsInput from jQuery, and expose as AMD/CJS module.
-- Package component up for bower and components.
-- Seperate autocompleter, so it's possible to use bootstrap, jquery, etc-autocompleters
-- Define better interface to call methods.
-- Add the option to have a hidden-input that contains the syntaxed-version, so it's easier to use out of the box.
-- Add unit tests!
-
+## Current additions to the base functionality:
+- Many tags with the same name can be added (for example if you have two different users named 'Kurt Cobain').
+- Easy and facebook like deleting of tags.
+- Tags can be added manualy in the format @[some-tag](user:id). User is only an option.
+- Many bugfixes (although there are a lot of bug to fix too)
